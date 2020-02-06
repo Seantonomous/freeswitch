@@ -308,6 +308,12 @@ SWITCH_AM_CXXFLAGS="-I${switch_srcdir}/src/include -I${switch_builddir}/src/incl
 SWITCH_AM_CPPFLAGS="-I${switch_srcdir}/src/include -I${switch_builddir}/src/include -I${switch_srcdir}/libs/libteletone/src"
 SWITCH_AM_LDFLAGS="-lm"
 
+# Disable assertions (default: off)
+AC_ARG_WITH(no-assertions, [AC_HELP_STRING([--with-no-assertions],[build without assert function])],[disable_assert="yes"],[disable_assert="no"])
+[ test "${disable_assert}" = "yes" ] && { SWITCH_AM_CFLAGS="${SWITCH_AM_CFLAGS} -DNDEBUG"; }
+AM_CONDITIONAL([NO_ASSERT], [test x$disable_assert = xyes])
+ac_configure_args="${ac_configure_args} --with-no-assertions=${disable_assertions}"
+
 #set SOLINK variable based on compiler and host
 if test "x${ax_cv_c_compiler_vendor}"  =  "xsun" ; then
     SOLINK="-Bdynamic -dy -G"
@@ -414,13 +420,13 @@ if test "x${ax_cv_c_compiler_vendor}"  =  "xsun" ; then
 elif test "x${ax_cv_c_compiler_vendor}" = "xclang" ; then
     APR_ADDTO(SWITCH_AM_CFLAGS, -fPIC -ffast-math)
     APR_ADDTO(SWITCH_AM_CXXFLAGS, -fPIC -ffast-math)
-    APR_ADDTO(SWITCH_AM_CFLAGS, -Werror)
+    [ test "x$disable_assert" = "xno" ] && { APR_ADDTO(SWITCH_AM_CFLAGS, -Werror) }
 elif test "x${ax_cv_c_compiler_vendor}" = "xgnu" ; then
     APR_ADDTO(SWITCH_AM_CFLAGS, -fPIC -ffast-math)
     APR_ADDTO(SWITCH_AM_CXXFLAGS, -fPIC -ffast-math)
     AC_SUBST([AM_MOD_AVMD_CXXFLAGS], [-std=gnu99])      # FS-8809, needed for MAP_POPULATE
     if test "$ac_cv_gcc_supports_w_no_unused_result" = yes; then
-      APR_ADDTO(SWITCH_AM_CFLAGS, -Werror)
+      [ test "x$disable_assert" = "xno" ] && { APR_ADDTO(SWITCH_AM_CFLAGS, -Werror) }
       APR_ADDTO(SWITCH_AM_CFLAGS, -Wno-unused-result)
     fi
     if test "$ac_cv_gcc_supports_w_no_misleading_indentation" = yes; then
