@@ -3204,6 +3204,8 @@ SWITCH_DECLARE(void) switch_ivr_set_json_call_stats(cJSON *json, switch_core_ses
 	add_jstat(j_in, stats->inbound.largest_jb_size, "largest_jb_size");
 	add_jstat(j_in, stats->inbound.min_variance, "jitter_min_variance");
 	add_jstat(j_in, stats->inbound.max_variance, "jitter_max_variance");
+	add_jstat(j_in, stats->inbound.variance, "jitter_variance");
+	add_jstat(j_in, stats->inbound.std_deviation, "jitter_std_deviation");
 	add_jstat(j_in, stats->inbound.lossrate, "jitter_loss_rate");
 	add_jstat(j_in, stats->inbound.burstrate, "jitter_burst_rate");
 	add_jstat(j_in, stats->inbound.mean_interval, "mean_interval");

@@ -1988,6 +1988,8 @@ static void set_stats(switch_core_session_t *session, switch_media_type_t type, 
 		add_stat(stats->inbound.cng_packet_count, "in_cng_packet_count");
 		add_stat(stats->inbound.flush_packet_count, "in_flush_packet_count");
 		add_stat(stats->inbound.largest_jb_size, "in_largest_jb_size");
+		add_stat_double(stats->inbound.variance, "in_jitter_variance");
+		add_stat_double(stats->inbound.std_deviation, "in_jitter_std_deviation");
 		add_stat_double(stats->inbound.min_variance, "in_jitter_min_variance");
 		add_stat_double(stats->inbound.max_variance, "in_jitter_max_variance");
 		add_stat_double(stats->inbound.lossrate, "in_jitter_loss_rate");
