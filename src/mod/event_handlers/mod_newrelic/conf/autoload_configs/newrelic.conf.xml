@@ -1,0 +1,21 @@
+<include>
+	<configuration name="newrelic.conf" description="NEWRELIC APM">
+		<settings>
+      
+      <!-- New Relic app name -->
+      <param name="app-name" value=""/>
+      
+      <!-- New Relic license key -->
+      <param name="license-key" value=""/>
+			
+			<!-- Report RTP stats for active channels - increased overhead! -->
+			<param name="report-rtp-stats" value="true"/>
+			<!-- How often to check RTP stats -->
+			<param name="rtp-scan-interval" value="30"/>
+
+      <!-- Other settings here??
+      <param name="???" value=""/>
+      -->
+		</settings>
+	</configuration>
+</include>

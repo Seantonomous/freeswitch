@@ -1376,6 +1376,16 @@ AC_CHECK_LIB([mp3lame], [lame_init],[
     AC_SUBST([MP3LAME_CFLAGS], [$CPPFLAGS])])])
 AM_CONDITIONAL([HAVE_MP3LAME],[$mp3lame])
 
+has_newrelic=false
+AC_CHECK_LIB([newrelic], [newrelic_create_app], [
+	AC_CHECK_HEADER([newrelic/libnewrelic.h],[
+		has_newrelic=true
+		AC_SUBST([NEWRELIC_LIBS], [`pkg-config libnewrelic --libs`])
+		AC_SUBST([NEWRELIC_CFLAGS], [`pkg-config libnewrelic --cflags`])
+	])
+], [], [-lm])
+AM_CONDITIONAL([HAS_NEWRELIC], [$has_newrelic])
+
 PKG_CHECK_MODULES([AVCODEC], [libavcodec >= 53.35.0],[
   AM_CONDITIONAL([HAVE_AVCODEC],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_AVCODEC],[false])])
@@ -1990,6 +2000,7 @@ AC_CONFIG_FILES([Makefile
 		src/mod/event_handlers/mod_fail2ban/Makefile
 		src/mod/event_handlers/mod_format_cdr/Makefile
 		src/mod/event_handlers/mod_json_cdr/Makefile
+		src/mod/event_handlers/mod_newrelic/Makefile
 		src/mod/event_handlers/mod_kazoo/Makefile
 		src/mod/event_handlers/mod_radius_cdr/Makefile
 		src/mod/event_handlers/mod_odbc_cdr/Makefile

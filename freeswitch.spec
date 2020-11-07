@@ -36,6 +36,7 @@
 %define build_timerfd 1
 %define build_mod_esl 0
 %define build_mod_rayo 1
+%define build_mod_newrelic 1
 %define build_mod_ssml 1
 %define build_mod_shout 1
 %define build_mod_opusfile 0
@@ -48,12 +49,23 @@
 %{?with_sang_ss7:%define build_sng_ss7 1 }
 %{?with_py26_esl:%define build_py26_esl 1 }
 %{?with_timerfd:%define build_timerfd 1 }
+%{?with_newrelic:%define build_mod_newrelic 1 }
 %{?with_mod_esl:%define build_mod_esl 1 }
 %{?with_mod_shout:%define build_mod_shout 1 }
 %{?with_mod_opusfile:%define build_mod_opusfile 1 }
 %{?with_mod_v8:%define build_mod_v8 1 }
 
-%define nonparsedversion 1.7.0
+%global __os_install_post    \
+    /usr/lib/rpm/redhat/brp-compress \
+    %{!?__debug_package:\
+    /usr/lib/rpm/redhat/brp-strip %{__strip} \
+    /usr/lib/rpm/redhat/brp-strip-comment-note %{__strip} %{__objdump} \
+    } \
+    /usr/lib/rpm/redhat/brp-strip-static-archive %{__strip} \
+    %{!?__jar_repack:/usr/lib/rpm/redhat/brp-java-repack-jars} \
+%{nil}
+
+%define nonparsedversion 1.10.5
 %define version %(echo '%{nonparsedversion}' | sed 's/-//g')
 %define release 1
 
@@ -123,7 +135,7 @@ Vendor:       	http://www.freeswitch.org/
 #					Source files and where to get them
 #
 ######################################################################################################################
-Source0:        http://files.freeswitch.org/%{name}-%{nonparsedversion}.tar.bz2
+Source0:	https://github.com/signalwire/freeswitch/archive/freeswitch-%{nonparsedversion}.tar.gz
 Source1:	http://files.freeswitch.org/downloads/libs/v8-3.24.14.tar.bz2
 Source2:	http://files.freeswitch.org/downloads/libs/mongo-c-driver-1.1.0.tar.gz
 Source3:	http://files.freeswitch.org/downloads/libs/pocketsphinx-0.8.tar.gz
@@ -165,6 +177,9 @@ BuildRequires: yasm
 BuildRequires: pkgconfig
 %if 0%{?rhel} < 6 && 0%{?fedora} <= 6
 BuildRequires: termcap
+%endif
+%if %{build_mod_newrelic}
+BuildRequires: newrelic-c-sdk
 %endif
 BuildRequires: unixODBC-devel
 BuildRequires: gdbm-devel
@@ -1063,6 +1078,16 @@ Rayo 3PCC for FreeSWITCH.  http://rayo.org   http://xmpp.org/extensions/xep-0327
 Rayo is an XMPP protocol extension for third-party control of telephone calls.
 %endif
 
+%if %{build_mod_newrelic}
+%package event-newrelic
+Summary:        New Relic reporting the FreeSWITCH open source telephony platform
+Group:          System/Libraries
+Requires:	%{name} = %{version}-%{release}
+
+%description event-newrelic
+FreeSWITCH RTP and session reporting to the New Relic monitoring platform
+%endif
+
 %package event-snmp
 Summary:	SNMP stats reporter for the FreeSWITCH open source telephony platform
 Group:		System/Libraries
@@ -1554,6 +1579,10 @@ EVENT_HANDLERS_MODULES="event_handlers/mod_cdr_csv event_handlers/mod_cdr_pg_csv
 EVENT_HANDLERS_MODULES+=" event_handlers/mod_rayo"
 %endif
 
+%if %{build_mod_newrelic}
+EVENT_HANDLERS_MODULES+=" event_handlers/mod_newrelic"
+%endif
+
 %if %{build_mod_kazoo}
 EVENT_HANDLERS_MODULES+=" event_handlers/mod_kazoo"
 %endif
@@ -1750,6 +1779,7 @@ cd ../..
 # Add monit file
 %{__install} -D -m 644 build/freeswitch.monitrc %{buildroot}/etc/monit.d/freeswitch.monitrc
 %endif
+
 ######################################################################################################################
 #
 #                               Remove files that are not wanted if they exist
@@ -1766,8 +1796,6 @@ cd ../..
 %else
 %{__rm} -f %{buildroot}/%{MODINSTDIR}/ftmod_sangoma_isdn*
 %endif
-
-
 
 ######################################################################################################################
 #
@@ -2371,6 +2399,11 @@ fi
 %if %{build_mod_rayo}
 %files event-rayo 
 %{MODINSTDIR}/mod_rayo.so*
+%endif
+
+%if %{build_mod_newrelic}
+%files event-newrelic 
+%{MODINSTDIR}/mod_newrelic.so*
 %endif
 
 %files event-snmp
