@@ -46,9 +46,11 @@ SWITCH_MODULE_DEFINITION(mod_newrelic, mod_newrelic_load, mod_newrelic_shutdown,
 static struct {
 	char *app_name;
 	char *license_key;
-	newrelic_app_config_t *config = 0;
-	newrelic_app_t *app = 0;
-	uint32_t shutdown = 0;
+	switch_thread_t *thread;
+	switch_memory_pool_t *pool;
+	//newrelic_app_config_t *config = 0;
+	//newrelic_app_t *app = 0;
+	uint32_t shutdown;
 } globals;
 
 static switch_state_handler_table_t state_handlers = {
@@ -69,11 +71,10 @@ static switch_status_t do_config(switch_bool_t reload)
 {
 	char *cf = "newrelic.conf";
 	switch_xml_t cfg, xml, settings, param;
-	memset(&globals, 0, sizeof(globals));
 	
 	globals.app_name = "";
 	globals.license_key = "";
-	globals.pool = pool;
+	globals.shutdown = 0;
 	
 	/* parse the config */
 	if (!(xml = switch_xml_open_cfg(cf, &cfg, NULL))) {
@@ -89,14 +90,14 @@ static switch_status_t do_config(switch_bool_t reload)
 			if (!strcasecmp(var, "app-name") && !zstr(val)) {
 				globals.app_name = switch_core_strdup(globals.pool, val);
 			} else {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "New Relic app name required.\n", cf);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "New Relic app name required.\n");
 				return SWITCH_STATUS_TERM;
 			}
 			
 			if (!strcasecmp(var, "license-key") && !zstr(val)) {
 				globals.license_key = switch_core_strdup(globals.pool, val);
 			} else {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "New Relic license key required.\n", cf);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "New Relic license key required.\n");
 				return SWITCH_STATUS_TERM;
 			}
 		}
@@ -134,19 +135,20 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 			continue;
 		}
 		
-		for (m = list->head; m; m = m->next) {
+		for (switch_console_callback_match_node_t *m = callback->head; m; m = m->next) {
 			switch_core_session_t *session = NULL;
 			
 			if((session = switch_core_session_locate(m->val))) {
+				switch_channel_t *channel = NULL;
+				switch_event_t *event = NULL;
+				
 				switch_core_media_set_stats(session);
 				switch_core_session_rwunlock(session);
 				
-				switch_channel_t *channel = switch_core_session_get_channel(session);
-				switch_event_t *event = NULL;
-				
+				channel = switch_core_session_get_channel(session);
 				switch_channel_get_variables(channel, &event);
 				
-				for (h = event->headers; h; h = h->next) {
+				for (switch_event_header_t *h = event->headers; h; h = h->next) {
 					switch_log_printf(
 							SWITCH_CHANNEL_LOG,
 							SWITCH_LOG_CONSOLE,
@@ -156,16 +158,20 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 			}
 		}
 		
-		switch_sleep(30000)
+		switch_sleep(30000);
 	}
 
+	return NULL;
 }
 
 /* Macro expands to: switch_status_t mod_newrelic_load(switch_loadable_module_interface_t **module_interface, switch_memory_pool_t *pool) */
 SWITCH_MODULE_LOAD_FUNCTION(mod_newrelic_load)
 {
+	switch_threadattr_t *thd_attr;
 	
-	switch_api_interface_t *api_interface;
+	memset(&globals, 0, sizeof(globals));
+	globals.pool = pool;
+
 	/* connect my internal structure to the blank pointer passed to me */
 	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
 
@@ -173,7 +179,6 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_newrelic_load)
 
 	do_config(SWITCH_FALSE);
 	
-	switch_threadattr_t *thd_attr;
 	switch_threadattr_create(&thd_attr, globals.pool);
 	switch_threadattr_stacksize_set(thd_attr, SWITCH_THREAD_STACKSIZE);
 	switch_thread_create(&globals.thread, thd_attr, stats_thread, NULL, globals.pool);

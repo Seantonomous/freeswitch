@@ -1,27 +1,8 @@
-# Customise these as appropriate
-MODNAME = mod_newrelic.so
-MODOBJ = mod_newrelic.o
-MODCFLAGS = -Wall -Werror
-MODLDFLAGS = -lssl
- 
-CC = gcc
-CFLAGS = -fPIC -g -ggdb `pkg-config --cflags freeswitch` $(MODCFLAGS)
-LDFLAGS = `pkg-config --libs freeswitch` $(MODLDFLAGS)
- 
-.PHONY: all
-all: $(MODNAME)
- 
-$(MODNAME): $(MODOBJ)
-    @$(CC) -shared -o $@ $(MODOBJ) $(LDFLAGS)
- 
-.c.o: $<
-    @$(CC) $(CFLAGS) -o $@ -c $<
- 
-.PHONY: clean
-clean:
-    rm -f $(MODNAME) $(MODOBJ)
- 
-.PHONY: install
-install: $(MODNAME)
-    install -d $(DESTDIR)/usr/lib/freeswitch/mod
-    install $(MODNAME) $(DESTDIR)/usr/lib/freeswitch/mod
+include $(top_srcdir)/build/modmake.rulesam
+MODNAME=mod_newrelic
+
+mod_LTLIBRARIES = mod_newrelic.la
+mod_newrelic_la_SOURCES  = mod_newrelic.c
+mod_newrelic_la_CFLAGS   = $(AM_CFLAGS)
+mod_newrelic_la_LIBADD   = $(switch_builddir)/libfreeswitch.la
+mod_newrelic_la_LDFLAGS  = -avoid-version -module -no-undefined -shared
