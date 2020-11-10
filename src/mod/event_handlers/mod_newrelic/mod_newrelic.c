@@ -53,27 +53,18 @@ static struct {
 	uint32_t shutdown;
 } globals;
 
-static switch_state_handler_table_t state_handlers = {
-	/*.on_init */ NULL,
-	/*.on_routing */ NULL,
-	/*.on_execute */ NULL,
-	/*.on_hangup */ NULL,
-	/*.on_exchange_media */ NULL,
-	/*.on_soft_execute */ NULL,
-	/*.on_consume_media */ NULL,
-	/*.on_hibernate */ NULL,
-	/*.on_reset */ NULL,
-	/*.on_park */ NULL,
-	/*.on_reporting */ NULL
-};
-
-static switch_status_t do_config(switch_bool_t reload)
+static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *pool)
 {
 	char *cf = "newrelic.conf";
 	switch_xml_t cfg, xml, settings, param;
 	
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Loading New Relic configuration\n");
+	
+	memset(&globals, 0, sizeof(globals));
+	globals.pool = pool;
 	globals.app_name = "";
 	globals.license_key = "";
+	globals.pool = pool;
 	globals.shutdown = 0;
 	
 	/* parse the config */
@@ -120,18 +111,22 @@ static switch_status_t do_config(switch_bool_t reload)
 	
 	switch_xml_free(xml);
 
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Succesfully loaded New Relic configuration\n");
+
 	return SWITCH_STATUS_SUCCESS;
 }
 
 
 static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 {
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CONSOLE, "New Relic stats thread started.\n");
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "New Relic stats thread started.\n");
 
 	while (!globals.shutdown) {
 		switch_console_callback_match_t *callback = NULL;
 		
 		if (!(callback = switch_core_session_findall())) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "No sessions found, sleeping\n");
+			switch_sleep(30000000);
 			continue;
 		}
 		
@@ -158,7 +153,7 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 			}
 		}
 		
-		switch_sleep(30000);
+		switch_sleep(30000000);
 	}
 
 	return NULL;
@@ -168,22 +163,15 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 SWITCH_MODULE_LOAD_FUNCTION(mod_newrelic_load)
 {
 	switch_threadattr_t *thd_attr;
-	
-	memset(&globals, 0, sizeof(globals));
-	globals.pool = pool;
 
-	/* connect my internal structure to the blank pointer passed to me */
-	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
-
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Loading New Relic configuration!\n");
-
-	do_config(SWITCH_FALSE);
+	do_config(SWITCH_FALSE, pool);
 	
 	switch_threadattr_create(&thd_attr, globals.pool);
 	switch_threadattr_stacksize_set(thd_attr, SWITCH_THREAD_STACKSIZE);
 	switch_thread_create(&globals.thread, thd_attr, stats_thread, NULL, globals.pool);
 	
-	switch_core_add_state_handler(&state_handlers);
+	/* connect my internal structure to the blank pointer passed to me */
+	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
 
 	/* indicate that the module should continue to be loaded */
 	return SWITCH_STATUS_SUCCESS;
@@ -194,7 +182,11 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_newrelic_load)
   Macro expands to: switch_status_t mod_newrelic_shutdown() */
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_newrelic_shutdown)
 {
+	switch_status_t status;
+	
 	globals.shutdown = 1;
+	
+	switch_thread_join(&status, globals.thread);
 	//newrelic_destroy_app(&app);
 	return SWITCH_STATUS_SUCCESS;
 }
