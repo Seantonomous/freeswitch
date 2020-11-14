@@ -31,7 +31,7 @@
  *
  */
 #include <switch.h>
-// #include "libnewrelic.h"
+#include <libnewrelic.h>
 
 /* Prototypes */
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_newrelic_shutdown);
@@ -47,11 +47,26 @@ static struct {
 	char *app_name;
 	char *license_key;
 	switch_thread_t *thread;
+	//switch_event_node_t *node;
 	switch_memory_pool_t *pool;
-	//newrelic_app_config_t *config = 0;
-	//newrelic_app_t *app = 0;
+	newrelic_app_config_t *config;
+	newrelic_app_t *app;
 	uint32_t shutdown;
 } globals;
+
+static switch_state_handler_table_t state_handlers = {
+	/*.on_init */ NULL,
+	/*.on_routing */ NULL,
+	/*.on_execute */ NULL,
+	/*.on_hangup */ my_on_hangup,
+	/*.on_exchange_media */ NULL,
+	/*.on_soft_execute */ NULL,
+	/*.on_consume_media */ NULL,
+	/*.on_hibernate */ NULL,
+	/*.on_reset */ NULL,
+	/*.on_park */ NULL,
+	/*.on_reporting */ NULL
+};
 
 static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *pool)
 {
@@ -80,34 +95,23 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 			
 			if (!strcasecmp(var, "app-name") && !zstr(val)) {
 				globals.app_name = switch_core_strdup(globals.pool, val);
-			} else {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "New Relic app name required.\n");
-				return SWITCH_STATUS_TERM;
 			}
 			
 			if (!strcasecmp(var, "license-key") && !zstr(val)) {
 				globals.license_key = switch_core_strdup(globals.pool, val);
-			} else {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "New Relic license key required.\n");
-				return SWITCH_STATUS_TERM;
 			}
 		}
 	}
 	
-	/*
 	// Create the New Relic app
-	globals.config = newrelic_create_app_config(app_name, license_key);
- 
-  customize_config(&globals.config);
+	globals.config = newrelic_create_app_config(globals.app_name, globals.license_key);
 	
 	globals.config->transaction_tracer.threshold = NEWRELIC_THRESHOLD_IS_OVER_DURATION;
   globals.config->transaction_tracer.duration_us = 1;
 	
 	// Wait up to 10 seconds for the SDK to connect to the daemon
-  app = newrelic_create_app(globals.config, 10000);
+  globals.app = newrelic_create_app(globals.config, 10000);
   newrelic_destroy_app_config(&globals.config);
-	// Log if unable to connect to daemon??
-	*/
 	
 	switch_xml_free(xml);
 
@@ -116,6 +120,12 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 	return SWITCH_STATUS_SUCCESS;
 }
 
+/*
+static switch_status_t my_on_hangup(switch_core_session_t *session)
+{
+	return SWITCH_STATUS_SUCCESS;
+}
+*/
 
 static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 {
@@ -123,12 +133,53 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 
 	while (!globals.shutdown) {
 		switch_console_callback_match_t *callback = NULL;
+		newrelic_custom_event_t* custom_event = 0;
+  	newrelic_segment_t* seg = 0;
+		newrelic_txn_t* txn = 0;
+		
+		int session_count = 0;
+		
+		long in_skip_packet_count = 0;
+		long in_jitter_packet_count = 0;
+		long in_dtmf_packet_count = 0;
+		
+		double in_tot_jitter_min_variance = 0;
+		double in_tot_jitter_max_variance = 0;
+		double in_tot_jitter_loss_rate = 0;
+		double in_tot_jitter_burst_rate = 0;
+		
+		double in_avg_jitter_min_variance = 0;
+		double in_avg_jitter_max_variance = 0;
+		double in_avg_jitter_loss_rate = 0;
+		double in_avg_jitter_burst_rate = 0;
+		
+		double in_tot_mean_interval = 0;
+		double in_avg_mean_interval = 0;
+		
+		long in_flaw_total = 0;
+		long in_avg_flaw_total = 0;
+		
+		double in_tot_mos = 0;
+		double in_avg_mos = 0;
 		
 		if (!(callback = switch_core_session_findall())) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "No sessions found, sleeping\n");
 			switch_sleep(30000000);
 			continue;
 		}
+		
+		txn = newrelic_start_non_web_transaction(globals.app, "FreeSWITCHStatsTxn");
+		seg = newrelic_start_segment(txn, NULL, NULL);
+		
+		custom_event = newrelic_create_custom_event("FreeSWITCHStatsEvent");
+		session_count = callback->count;
+ 
+ 		newrelic_custom_event_add_attribute_int(custom_event, "SessionCount", session_count);
+ 		
+	  //newrelic_custom_event_add_attribute_int(custom_event, "keya", 42);
+	  //newrelic_custom_event_add_attribute_long(custom_event, "keyb", 84);
+	  //newrelic_custom_event_add_attribute_double(custom_event, "keyc", 42.42);
+	  //newrelic_custom_event_add_attribute_string(custom_event, "keyd", "A string");
 		
 		for (switch_console_callback_match_node_t *m = callback->head; m; m = m->next) {
 			switch_core_session_t *session = NULL;
@@ -144,14 +195,66 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 				switch_channel_get_variables(channel, &event);
 				
 				for (switch_event_header_t *h = event->headers; h; h = h->next) {
+					/*
 					switch_log_printf(
 							SWITCH_CHANNEL_LOG,
 							SWITCH_LOG_CONSOLE,
 							"%s: %s\n",
 							h->name, h->value);
+					*/
+					
+					if (!strcasecmp(h->name, "rtp_audio_in_skip_packet_count")) {
+						in_skip_packet_count += atol(h->value);
+					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_packet_count")) {
+						in_jitter_packet_count += atol(h->value);
+					} else if (!strcasecmp(h->name, "rtp_audio_in_dtmf_packet_count")) {
+						in_dtmf_packet_count += atol(h->value);
+					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_min_variance")) {
+						in_tot_jitter_min_variance += strtod(h->value, NULL);
+					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_max_variance")) {
+						in_tot_jitter_max_variance += strtod(h->value, NULL);
+					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_loss_rate")) {
+						in_tot_jitter_loss_rate += strtod(h->value, NULL);
+					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_burst_rate")) {
+						in_tot_jitter_burst_rate += strtod(h->value, NULL);
+					} else if (!strcasecmp(h->name, "rtp_audio_in_mean_interval")) {
+						in_tot_mean_interval += strtod(h->value, NULL);
+					} else if (!strcasecmp(h->name, "rtp_audio_in_flaw_total")) {
+						in_flaw_total += atol(h->value);
+					} else if (!strcasecmp(h->name, "rtp_audio_in_mos")) {
+						in_tot_mos += strtod(h->value, NULL);
+					}
 				}
 			}
 		}
+		
+		//Calculate averages
+		in_avg_jitter_min_variance = in_tot_jitter_min_variance / (double)session_count;
+		in_avg_jitter_max_variance = in_tot_jitter_max_variance / (double)session_count;
+		in_avg_jitter_loss_rate = in_tot_jitter_loss_rate / (double)session_count;
+		in_avg_jitter_burst_rate = in_tot_jitter_burst_rate / (double)session_count;
+		
+		in_avg_mean_interval = in_tot_mean_interval / (double)session_count;
+		in_avg_flaw_total = in_flaw_total / (long)session_count;
+		in_avg_mos = in_tot_mos / (double)session_count;
+		
+		newrelic_custom_event_add_attribute_long(custom_event, "SkipPacketCount", in_skip_packet_count);
+		newrelic_custom_event_add_attribute_long(custom_event, "JitterPacketCount", in_jitter_packet_count);
+		newrelic_custom_event_add_attribute_long(custom_event, "DTMFPacketCount", in_dtmf_packet_count);
+		newrelic_custom_event_add_attribute_double(custom_event, "AvgJitterMinVariance", in_avg_jitter_min_variance);
+		newrelic_custom_event_add_attribute_double(custom_event, "AvgJitterMaxVariance", in_avg_jitter_max_variance);
+		newrelic_custom_event_add_attribute_double(custom_event, "AvgJitterLossRate", in_avg_jitter_loss_rate);
+		newrelic_custom_event_add_attribute_double(custom_event, "AvgJitterBurstRate", in_avg_jitter_burst_rate);
+		newrelic_custom_event_add_attribute_double(custom_event, "AvgMeanInterval", in_avg_mean_interval);
+		
+		newrelic_custom_event_add_attribute_long(custom_event, "AvgFlawTotal", in_avg_flaw_total);
+		newrelic_custom_event_add_attribute_long(custom_event, "FlawTotal", in_flaw_total);
+		
+		newrelic_custom_event_add_attribute_double(custom_event, "AvgMos", in_avg_mos);
+		
+		newrelic_record_custom_event(txn, &custom_event);
+		newrelic_end_segment(txn, &seg);
+		newrelic_end_transaction(&txn);
 		
 		switch_sleep(30000000);
 	}
@@ -170,6 +273,15 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_newrelic_load)
 	switch_threadattr_stacksize_set(thd_attr, SWITCH_THREAD_STACKSIZE);
 	switch_thread_create(&globals.thread, thd_attr, stats_thread, NULL, globals.pool);
 	
+	/*
+	if (switch_event_bind_removable(modname, SWITCH_EVENT_TRAP, SWITCH_EVENT_SUBCLASS_ANY, event_handler, NULL, &globals.node) != SWITCH_STATUS_SUCCESS) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't bind!\n");
+		return SWITCH_STATUS_GENERR;
+	}
+	
+	switch_core_add_state_handler(&state_handlers);
+	*/
+	
 	/* connect my internal structure to the blank pointer passed to me */
 	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
 
@@ -187,6 +299,12 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_newrelic_shutdown)
 	globals.shutdown = 1;
 	
 	switch_thread_join(&status, globals.thread);
-	//newrelic_destroy_app(&app);
+	newrelic_destroy_app(&globals.app);
+	
+	/*
+	switch_event_unbind(&globals.node);
+	switch_core_remove_state_handler(&state_handlers);
+	*/
+	
 	return SWITCH_STATUS_SUCCESS;
 }
