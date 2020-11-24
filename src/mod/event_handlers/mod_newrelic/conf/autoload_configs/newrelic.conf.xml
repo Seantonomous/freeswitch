@@ -7,13 +7,13 @@
       
       <!-- New Relic license key -->
       <param name="license-key" value=""/>
+			
+			<!-- Report RTP stats for active channels - increased overhead! -->
+			<param name="report-rtp-stats" value="true"/>
+			<!-- How often to check RTP stats -->
+			<param name="rtp-scan-interval" value="30"/>
 
       <!-- Other settings here??
-			<param name="report-rtp-stats" value="true"/>
-			<param name="rtp-scan-interval" value="30"/>
-			
-			<param name="session-initial-bound" value="25"/>
-			
       <param name="???" value=""/>
       -->
 		</settings>
