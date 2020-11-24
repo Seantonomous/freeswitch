@@ -65,6 +65,7 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 	
 	memset(&globals, 0, sizeof(globals));
 	globals.pool = pool;
+	globals.app = NULL;
 	globals.app_name = "";
 	globals.license_key = "";
 	globals.report_rtp_stats = SWITCH_FALSE;
@@ -95,6 +96,12 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 		}
 	}
 	
+	if (zstr(globals.app_name) || zstr(globals.license_key)) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "You must provide an app name & license key!\n");
+		switch_xml_free(xml);
+		return SWITCH_STATUS_TERM;
+	}
+	
 	// Create the New Relic app
 	globals.config = newrelic_create_app_config(globals.app_name, globals.license_key);
 	
@@ -106,6 +113,11 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
   newrelic_destroy_app_config(&globals.config);
 	
 	switch_xml_free(xml);
+	
+	if (globals.app == NULL) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Error creating new relic app!\n");
+		return SWITCH_STATUS_TERM;
+	}
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Succesfully loaded New Relic configuration\n");
 
@@ -317,7 +329,10 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_newrelic_load)
 {
 	switch_threadattr_t *thd_attr;
 
-	do_config(SWITCH_FALSE, pool);
+	if (do_config(SWITCH_FALSE, pool) == SWITCH_STATUS_TERM) {
+		// We were unable to parse the configuration or start the app
+		return SWITCH_STATUS_TERM;
+	}
 	
 	if (globals.report_rtp_stats) {
 		switch_threadattr_create(&thd_attr, globals.pool);
@@ -345,6 +360,9 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_newrelic_shutdown)
 	
 	if (globals.report_rtp_stats) {
 		switch_thread_join(&status, globals.thread);
+	}
+	
+	if (globals.app != NULL) {
 		newrelic_destroy_app(&globals.app);
 	}
 	
