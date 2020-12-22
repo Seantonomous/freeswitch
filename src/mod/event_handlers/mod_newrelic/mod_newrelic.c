@@ -165,6 +165,24 @@ static switch_status_t my_on_hangup(switch_core_session_t *session)
 			newrelic_custom_event_add_attribute_string(custom_event, "WriteCodec", h->value);
 		} else if (!strcasecmp(h->name, "hangup_cause")) {
 			newrelic_custom_event_add_attribute_string(custom_event, "HangupCause", h->value);
+		} else if (!strcasecmp(h->name, "sip_invite_failure_status")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "SipInviteFailureStatus", h->value);
+		} else if (!strcasecmp(h->name, "sip_invite_failure_phrase")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "SipInviteFailurePhrase", h->value);
+		} else if (!strcasecmp(h->name, "sip_user_agent")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "SipUserAgent", h->value);
+		} else if (!strcasecmp(h->name, "sip_term_status")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "SipTermStatus", h->value);
+		} else if (!strcasecmp(h->name, "sofia_profile_name")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "SofiaProfileName", h->value);
+		} else if (!strcasecmp(h->name, "direction")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "Direction", h->value);
+		} else if (!strcasecmp(h->name, "sip_gateway_name")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "SipGatewayName", h->value);
+		} else if (!strcasecmp(h->name, "remote_media_ip")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "RemoteMediaIp", h->value);
+		} else if (!strcasecmp(h->name, "uuid")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "Uuid", h->value);
 		}
 	}
 	
@@ -286,6 +304,25 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 					} else if (!strcasecmp(h->name, "rtp_audio_in_mos")) {
 						in_tot_mos += strtod(h->value, NULL);
 					}
+					/*
+					else if (!strcasecmp(h->name, "sofia_profile_name")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "SofiaProfileName", h->value);
+					} else if (!strcasecmp(h->name, "direction")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "Direction", h->value);
+					} else if (!strcasecmp(h->name, "sip_gateway_name")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "SipGatewayName", h->value);
+					} else if (!strcasecmp(h->name, "sip_gateway_name")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "SipGatewayName", h->value);
+					} else if (!strcasecmp(h->name, "remote_media_ip")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "RemoteMediaIp", h->value);
+					} else if (!strcasecmp(h->name, "uuid")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "Uuid", h->value);
+					} else if (!strcasecmp(h->name, "sip_to_user")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "SipToUser", h->value);
+					} else if (!strcasecmp(h->name, "sip_from_user")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "SipToUser", h->value);
+					}
+					*/
 				}
 			}
 		}
