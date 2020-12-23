@@ -153,12 +153,30 @@ static switch_status_t my_on_hangup(switch_core_session_t *session)
 				h->name, h->value);
 		*/
 		
-		if (!strcasecmp(h->name, "sofia_profile_name")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "ProfileName", h->value);
+		if (!strcasecmp(h->name, "rtp_audio_in_skip_packet_count")) {
+			newrelic_custom_event_add_attribute_long(custom_event, "SkipPacketCount", atol(h->value));
+		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_packet_count")) {
+			newrelic_custom_event_add_attribute_long(custom_event, "JitterPacketCount", atol(h->value));
+		} else if (!strcasecmp(h->name, "rtp_audio_in_dtmf_packet_count")) {
+			newrelic_custom_event_add_attribute_long(custom_event, "DTMFPacketCount", atol(h->value));
+		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_min_variance")) {
+			newrelic_custom_event_add_attribute_double(custom_event, "JitterMinVariance", strtod(h->value, NULL));
+		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_max_variance")) {
+			newrelic_custom_event_add_attribute_double(custom_event, "JitterMaxVariance", strtod(h->value, NULL));
+		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_loss_rate")) {
+			newrelic_custom_event_add_attribute_double(custom_event, "JitterLossRate", strtod(h->value, NULL));
+		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_burst_rate")) {
+			newrelic_custom_event_add_attribute_double(custom_event, "JitterBurstRate", strtod(h->value, NULL));
+		} else if (!strcasecmp(h->name, "rtp_audio_in_mean_interval")) {
+			newrelic_custom_event_add_attribute_double(custom_event, "MeanInterval", strtod(h->value, NULL));
+		} else if (!strcasecmp(h->name, "rtp_audio_in_flaw_total")) {
+			newrelic_custom_event_add_attribute_long(custom_event, "FlawTotal", atol(h->value));
+		} else if (!strcasecmp(h->name, "rtp_audio_in_mos")) {
+			newrelic_custom_event_add_attribute_double(custom_event, "Mos", strtod(h->value, NULL));
 		} else if (!strcasecmp(h->name, "sip_from_host")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "FromHost", h->value);
+			newrelic_custom_event_add_attribute_string(custom_event, "SipFromHost", h->value);
 		} else if (!strcasecmp(h->name, "sip_contact_user")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "ContactUser", h->value);
+			newrelic_custom_event_add_attribute_string(custom_event, "SipContactUser", h->value);
 		} else if (!strcasecmp(h->name, "read_codec")) {
 			newrelic_custom_event_add_attribute_string(custom_event, "ReadCodec", h->value);
 		} else if (!strcasecmp(h->name, "write_codec")) {
@@ -172,7 +190,7 @@ static switch_status_t my_on_hangup(switch_core_session_t *session)
 		} else if (!strcasecmp(h->name, "sip_user_agent")) {
 			newrelic_custom_event_add_attribute_string(custom_event, "SipUserAgent", h->value);
 		} else if (!strcasecmp(h->name, "sip_term_status")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SipTermStatus", h->value);
+			newrelic_custom_event_add_attribute_int(custom_event, "SipTermStatus", atoi(h->value));
 		} else if (!strcasecmp(h->name, "sofia_profile_name")) {
 			newrelic_custom_event_add_attribute_string(custom_event, "SofiaProfileName", h->value);
 		} else if (!strcasecmp(h->name, "direction")) {
@@ -183,6 +201,10 @@ static switch_status_t my_on_hangup(switch_core_session_t *session)
 			newrelic_custom_event_add_attribute_string(custom_event, "RemoteMediaIp", h->value);
 		} else if (!strcasecmp(h->name, "uuid")) {
 			newrelic_custom_event_add_attribute_string(custom_event, "Uuid", h->value);
+		} else if (!strcasecmp(h->name, "sip_to_user")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "SipToUser", h->value);
+		} else if (!strcasecmp(h->name, "sip_from_user")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "SipFromUser", h->value);
 		}
 	}
 	
@@ -213,34 +235,8 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 
 	while (!globals.shutdown) {
 		switch_console_callback_match_t *callback = NULL;
-		newrelic_custom_event_t* custom_event = 0;
   	newrelic_segment_t* seg = 0;
 		newrelic_txn_t* txn = 0;
-		
-		int session_count = 0;
-		
-		long in_skip_packet_count = 0;
-		long in_jitter_packet_count = 0;
-		long in_dtmf_packet_count = 0;
-		
-		double in_tot_jitter_min_variance = 0;
-		double in_tot_jitter_max_variance = 0;
-		double in_tot_jitter_loss_rate = 0;
-		double in_tot_jitter_burst_rate = 0;
-		
-		double in_avg_jitter_min_variance = 0;
-		double in_avg_jitter_max_variance = 0;
-		double in_avg_jitter_loss_rate = 0;
-		double in_avg_jitter_burst_rate = 0;
-		
-		double in_tot_mean_interval = 0;
-		double in_avg_mean_interval = 0;
-		
-		long in_flaw_total = 0;
-		long in_avg_flaw_total = 0;
-		
-		double in_tot_mos = 0;
-		double in_avg_mos = 0;
 		
 		if (!(callback = switch_core_session_findall())) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "No sessions found, sleeping\n");
@@ -251,22 +247,15 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 		txn = newrelic_start_non_web_transaction(globals.app, "FreeSWITCHStatsTxn");
 		seg = newrelic_start_segment(txn, NULL, NULL);
 		
-		custom_event = newrelic_create_custom_event("FreeSWITCHStatsEvent");
-		session_count = callback->count;
- 
- 		newrelic_custom_event_add_attribute_int(custom_event, "SessionCount", session_count);
- 		
-	  //newrelic_custom_event_add_attribute_int(custom_event, "keya", 42);
-	  //newrelic_custom_event_add_attribute_long(custom_event, "keyb", 84);
-	  //newrelic_custom_event_add_attribute_double(custom_event, "keyc", 42.42);
-	  //newrelic_custom_event_add_attribute_string(custom_event, "keyd", "A string");
-		
 		for (switch_console_callback_match_node_t *m = callback->head; m; m = m->next) {
 			switch_core_session_t *session = NULL;
 			
 			if((session = switch_core_session_locate(m->val))) {
 				switch_channel_t *channel = NULL;
 				switch_event_t *event = NULL;
+				newrelic_custom_event_t* custom_event = 0;
+	
+				custom_event = newrelic_create_custom_event("FreeSWITCHStatsEvent");
 				
 				switch_core_media_set_stats(session);
 				switch_core_session_rwunlock(session);
@@ -284,28 +273,26 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 					*/
 					
 					if (!strcasecmp(h->name, "rtp_audio_in_skip_packet_count")) {
-						in_skip_packet_count += atol(h->value);
+						newrelic_custom_event_add_attribute_long(custom_event, "SkipPacketCount", atol(h->value));
 					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_packet_count")) {
-						in_jitter_packet_count += atol(h->value);
+						newrelic_custom_event_add_attribute_long(custom_event, "JitterPacketCount", atol(h->value));
 					} else if (!strcasecmp(h->name, "rtp_audio_in_dtmf_packet_count")) {
-						in_dtmf_packet_count += atol(h->value);
+						newrelic_custom_event_add_attribute_long(custom_event, "DTMFPacketCount", atol(h->value));
 					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_min_variance")) {
-						in_tot_jitter_min_variance += strtod(h->value, NULL);
+						newrelic_custom_event_add_attribute_double(custom_event, "JitterMinVariance", strtod(h->value, NULL));
 					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_max_variance")) {
-						in_tot_jitter_max_variance += strtod(h->value, NULL);
+						newrelic_custom_event_add_attribute_double(custom_event, "JitterMaxVariance", strtod(h->value, NULL));
 					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_loss_rate")) {
-						in_tot_jitter_loss_rate += strtod(h->value, NULL);
+						newrelic_custom_event_add_attribute_double(custom_event, "JitterLossRate", strtod(h->value, NULL));
 					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_burst_rate")) {
-						in_tot_jitter_burst_rate += strtod(h->value, NULL);
+						newrelic_custom_event_add_attribute_double(custom_event, "JitterBurstRate", strtod(h->value, NULL));
 					} else if (!strcasecmp(h->name, "rtp_audio_in_mean_interval")) {
-						in_tot_mean_interval += strtod(h->value, NULL);
+						newrelic_custom_event_add_attribute_double(custom_event, "MeanInterval", strtod(h->value, NULL));
 					} else if (!strcasecmp(h->name, "rtp_audio_in_flaw_total")) {
-						in_flaw_total += atol(h->value);
+						newrelic_custom_event_add_attribute_long(custom_event, "FlawTotal", atol(h->value));
 					} else if (!strcasecmp(h->name, "rtp_audio_in_mos")) {
-						in_tot_mos += strtod(h->value, NULL);
-					}
-					/*
-					else if (!strcasecmp(h->name, "sofia_profile_name")) {
+						newrelic_custom_event_add_attribute_double(custom_event, "Mos", strtod(h->value, NULL));
+					} else if (!strcasecmp(h->name, "sofia_profile_name")) {
 						newrelic_custom_event_add_attribute_string(custom_event, "SofiaProfileName", h->value);
 					} else if (!strcasecmp(h->name, "direction")) {
 						newrelic_custom_event_add_attribute_string(custom_event, "Direction", h->value);
@@ -320,38 +307,16 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 					} else if (!strcasecmp(h->name, "sip_to_user")) {
 						newrelic_custom_event_add_attribute_string(custom_event, "SipToUser", h->value);
 					} else if (!strcasecmp(h->name, "sip_from_user")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "SipToUser", h->value);
+						newrelic_custom_event_add_attribute_string(custom_event, "SipFromUser", h->value);
+					} else if (!strcasecmp(h->name, "sip_contact_user")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "ContactUser", h->value);
 					}
-					*/
 				}
+				
+				newrelic_record_custom_event(txn, &custom_event);
 			}
 		}
 		
-		//Calculate averages
-		in_avg_jitter_min_variance = in_tot_jitter_min_variance / (double)session_count;
-		in_avg_jitter_max_variance = in_tot_jitter_max_variance / (double)session_count;
-		in_avg_jitter_loss_rate = in_tot_jitter_loss_rate / (double)session_count;
-		in_avg_jitter_burst_rate = in_tot_jitter_burst_rate / (double)session_count;
-		
-		in_avg_mean_interval = in_tot_mean_interval / (double)session_count;
-		in_avg_flaw_total = in_flaw_total / (long)session_count;
-		in_avg_mos = in_tot_mos / (double)session_count;
-		
-		newrelic_custom_event_add_attribute_long(custom_event, "SkipPacketCount", in_skip_packet_count);
-		newrelic_custom_event_add_attribute_long(custom_event, "JitterPacketCount", in_jitter_packet_count);
-		newrelic_custom_event_add_attribute_long(custom_event, "DTMFPacketCount", in_dtmf_packet_count);
-		newrelic_custom_event_add_attribute_double(custom_event, "AvgJitterMinVariance", in_avg_jitter_min_variance);
-		newrelic_custom_event_add_attribute_double(custom_event, "AvgJitterMaxVariance", in_avg_jitter_max_variance);
-		newrelic_custom_event_add_attribute_double(custom_event, "AvgJitterLossRate", in_avg_jitter_loss_rate);
-		newrelic_custom_event_add_attribute_double(custom_event, "AvgJitterBurstRate", in_avg_jitter_burst_rate);
-		newrelic_custom_event_add_attribute_double(custom_event, "AvgMeanInterval", in_avg_mean_interval);
-		
-		newrelic_custom_event_add_attribute_long(custom_event, "AvgFlawTotal", in_avg_flaw_total);
-		newrelic_custom_event_add_attribute_long(custom_event, "FlawTotal", in_flaw_total);
-		
-		newrelic_custom_event_add_attribute_double(custom_event, "AvgMos", in_avg_mos);
-		
-		newrelic_record_custom_event(txn, &custom_event);
 		newrelic_end_segment(txn, &seg);
 		newrelic_end_transaction(&txn);
 		
