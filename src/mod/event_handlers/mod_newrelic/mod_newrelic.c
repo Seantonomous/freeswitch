@@ -48,12 +48,11 @@ static struct {
 	char *license_key;
 	int report_rtp_stats;
 	uint32_t rtp_scan_interval;
-	switch_thread_t *thread;
+	uint32_t stats_task_id;
 	switch_event_node_t *node;
 	switch_memory_pool_t *pool;
 	newrelic_app_config_t *config;
 	newrelic_app_t *app;
-	uint32_t shutdown;
 } globals;
 
 static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *pool)
@@ -71,7 +70,7 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 	globals.report_rtp_stats = SWITCH_FALSE;
 	globals.rtp_scan_interval = 30;
 	globals.pool = pool;
-	globals.shutdown = 0;
+	globals.stats_task_id = -1;
 	
 	/* parse the config */
 	if (!(xml = switch_xml_open_cfg(cf, &cfg, NULL))) {
@@ -131,10 +130,6 @@ static switch_status_t my_on_hangup(switch_core_session_t *session)
 	newrelic_txn_t *txn = 0;
 	switch_event_t *event = NULL;
 	switch_channel_t *channel = switch_core_session_get_channel(session);
-	
-	if (globals.shutdown) {
-		return SWITCH_STATUS_SUCCESS;
-	}
 	
 	txn = newrelic_start_non_web_transaction(globals.app, "FreeSWITCHHangupTxn");
 	seg = newrelic_start_segment(txn, NULL, NULL);
@@ -229,21 +224,15 @@ static switch_state_handler_table_t state_handlers = {
 	/*.on_reporting */ NULL
 };
 
-static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
+SWITCH_STANDARD_SCHED_FUNC(stats_callback)
 {
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "New Relic stats thread started.\n");
-
-	while (!globals.shutdown) {
-		switch_console_callback_match_t *callback = NULL;
-  	newrelic_segment_t* seg = 0;
-		newrelic_txn_t* txn = 0;
-		
-		if (!(callback = switch_core_session_findall())) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "No sessions found, sleeping\n");
-			switch_sleep(globals.rtp_scan_interval * 1000000);
-			continue;
-		}
-		
+	switch_console_callback_match_t *callback = NULL;
+	newrelic_segment_t* seg = 0;
+	newrelic_txn_t* txn = 0;
+	
+	if (!(callback = switch_core_session_findall())) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "No sessions found, re-scheduling\n");
+	} else {
 		txn = newrelic_start_non_web_transaction(globals.app, "FreeSWITCHStatsTxn");
 		seg = newrelic_start_segment(txn, NULL, NULL);
 		
@@ -254,7 +243,7 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 				switch_channel_t *channel = NULL;
 				switch_event_t *event = NULL;
 				newrelic_custom_event_t* custom_event = 0;
-	
+
 				custom_event = newrelic_create_custom_event("FreeSWITCHStatsEvent");
 				
 				switch_core_media_set_stats(session);
@@ -264,13 +253,11 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 				switch_channel_get_variables(channel, &event);
 				
 				for (switch_event_header_t *h = event->headers; h; h = h->next) {
-					/*
-					switch_log_printf(
-							SWITCH_CHANNEL_LOG,
-							SWITCH_LOG_CONSOLE,
-							"%s: %s\n",
-							h->name, h->value);
-					*/
+					//switch_log_printf(
+					//		SWITCH_CHANNEL_LOG,
+					//		SWITCH_LOG_CONSOLE,
+					//		"%s: %s\n",
+					//		h->name, h->value);
 					
 					if (!strcasecmp(h->name, "rtp_audio_in_skip_packet_count")) {
 						newrelic_custom_event_add_attribute_long(custom_event, "SkipPacketCount", atol(h->value));
@@ -319,27 +306,23 @@ static void *SWITCH_THREAD_FUNC stats_thread(switch_thread_t *t, void *obj)
 		
 		newrelic_end_segment(txn, &seg);
 		newrelic_end_transaction(&txn);
-		
-		switch_sleep(30000000);
 	}
-
-	return NULL;
+	
+	// Reschedule the task
+	task->runtime = switch_epoch_time_now(NULL) + globals.rtp_scan_interval;
 }
 
 /* Macro expands to: switch_status_t mod_newrelic_load(switch_loadable_module_interface_t **module_interface, switch_memory_pool_t *pool) */
 SWITCH_MODULE_LOAD_FUNCTION(mod_newrelic_load)
 {
-	switch_threadattr_t *thd_attr;
-
 	if (do_config(SWITCH_FALSE, pool) == SWITCH_STATUS_TERM) {
 		// We were unable to parse the configuration or start the app
 		return SWITCH_STATUS_TERM;
 	}
 	
 	if (globals.report_rtp_stats) {
-		switch_threadattr_create(&thd_attr, globals.pool);
-		switch_threadattr_stacksize_set(thd_attr, SWITCH_THREAD_STACKSIZE);
-		switch_thread_create(&globals.thread, thd_attr, stats_thread, NULL, globals.pool);
+		//Schedule stats to be collected every rtp_scan_interval seconds
+		globals.stats_task_id = switch_scheduler_add_task(switch_epoch_time_now(NULL), stats_callback, "newrelic_rtp_stats", "mod_newrelic", 0, NULL, SSHF_NONE | SSHF_OWN_THREAD);
 	}
 	
 	switch_core_add_state_handler(&state_handlers);
@@ -355,13 +338,13 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_newrelic_load)
   Called when the system shuts down
   Macro expands to: switch_status_t mod_newrelic_shutdown() */
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_newrelic_shutdown)
-{
-	switch_status_t status;
-	
-	globals.shutdown = 1;
-	
+{	
 	if (globals.report_rtp_stats) {
-		switch_thread_join(&status, globals.thread);
+		if (switch_scheduler_del_task_id(globals.stats_task_id) == 1) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Successfully terminated NewRelic stats task.\n");
+		} else {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Not sure if NewRelic stats task terminated!\n");
+		}
 	}
 	
 	if (globals.app != NULL) {
