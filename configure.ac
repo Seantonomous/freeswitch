@@ -1366,7 +1366,7 @@ AM_CONDITIONAL([HAVE_MP3LAME],[$mp3lame])
 
 AC_CHECK_LIB([newrelic], [newrelic_create_app],
   AM_CONDITIONAL([HAVE_NEWRELIC],[true]),
-  AM_CONDITIONAL([HAVE_NEWRELIC],[true]))
+  AM_CONDITIONAL([HAVE_NEWRELIC],[false]), [-lm])
 
 NEWRELIC_LIBS="-lnewrelic"
 AC_SUBST(NEWRELIC_LIBS)
