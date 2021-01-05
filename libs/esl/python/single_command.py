@@ -28,16 +28,16 @@ def main(argv):
 		if con.connected():
 			#run command
 			e = con.api(options.command)
-			print e.getBody()
+			print (e.getBody())
 
 		else:
 
-			print "Not Connected"
+			print ("Not Connected")
 			sys.exit(2)
 
 	except:
 		
-		print parser.get_usage()
-		
+		print (parser.get_usage())
+
 if __name__ == "__main__":
     main(sys.argv[1:])

@@ -17,4 +17,4 @@ if con.connected:
     e = con.recvEvent()
 
     if e:
-      print e.serialize()
+      print (e.serialize())

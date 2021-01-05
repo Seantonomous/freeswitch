@@ -1713,6 +1713,9 @@ if test "x$ac_cv_have_php" != "xno" -a "x$ac_cv_have_php_config" != "xno"; then
    AC_SUBST(PHP_CFLAGS)
 fi
 
+# is python3 installed?
+AM_CONDITIONAL([P3], [test ! -z $(type -P python3)])
+
 #
 # Python checks for mod_python
 #
@@ -1736,7 +1739,12 @@ then
 		AC_MSG_RESULT([$with_python])
 		AC_SUBST([PYTHON], ["$with_python"])
 	else
-		AC_PATH_PROG([PYTHON], ["python"], ["no"], ["$PATH:/usr/bin:/usr/local/bin"])
+		# use python3 by default if installed
+		if test ! -z $(type -P python3); then
+			AC_PATH_PROG([PYTHON], ["python3"], ["no"], ["$PATH:/usr/bin:/usr/local/bin"])
+		else
+			AC_PATH_PROG([PYTHON], ["python"], ["no"], ["$PATH:/usr/bin:/usr/local/bin"])
+		fi
 	fi
 
 	if test "$PYTHON" != "no" ; then
@@ -1774,8 +1782,11 @@ then
 			# python distutils found, get settings from python directly
 			#
 			PYTHON_CFLAGS="`$PYTHON -c 'from distutils import sysconfig; flags = [[\"-I\" + sysconfig.get_python_inc(0), \"-I\" + sysconfig.get_python_inc(1), \" \".join(sysconfig.get_config_var(\"CFLAGS\").split())]]; print(\" \".join(flags));' | sed -e 's/-arch i386//g;s/-arch x86_64//g'`"
-			PYTHON_LDFLAGS="`$PYTHON -c 'from distutils import sysconfig; libs = sysconfig.get_config_var(\"LIBS\").split() + sysconfig.get_config_var(\"SYSLIBS\").split(); libs.append(\"-lpython\"+sysconfig.get_config_var(\"VERSION\")); print(\" \".join(libs));'`"
-			PYTHON_LIB="`$PYTHON -c 'from distutils import sysconfig; print(\"python\" + sysconfig.get_config_var(\"VERSION\"));'`"
+
+			PYTHON_LDFLAGS="`$PYTHON -c 'from distutils import sysconfig; ldver = sysconfig.get_config_var(\"LDVERSION\"); libs = sysconfig.get_config_var(\"LIBS\").split() + sysconfig.get_config_var(\"SYSLIBS\").split(); libs.append(\"-lpython\" + [[ldver,sysconfig.get_config_var(\"VERSION\")]][[ldver==None]]); print(\" \".join(libs));'`"
+
+			PYTHON_LIB="`$PYTHON -c 'from distutils import sysconfig; print(\"python\" + sysconfig.get_config_var(\"VERSION\"));'`"				PYTHON_LIB="`$PYTHON -c 'from distutils import sysconfig; ldver = sysconfig.get_config_var(\"LDVERSION\"); print(\"python\" + [[ldver,sysconfig.get_config_var(\"VERSION\")]][[ldver==None]]);'`"
+
 			PYTHON_LIBDIR="`$PYTHON -c 'from distutils import sysconfig; print(sysconfig.get_config_var(\"LIBDIR\"));'`"
 
 			# handle python being installed into /usr/local
@@ -2068,9 +2079,10 @@ AC_CONFIG_FILES([Makefile
 		build/freeswitch.pc
 		build/standalone_module/freeswitch.pc
 		build/modmake.rules
-                libs/esl/Makefile
-                libs/esl/perl/Makefile
-                libs/esl/php/Makefile
+		libs/esl/Makefile
+		libs/esl/perl/Makefile
+		libs/esl/php/Makefile
+		libs/esl/python/Makefile
 		libs/xmlrpc-c/include/xmlrpc-c/config.h
 		libs/xmlrpc-c/xmlrpc_config.h
 		libs/xmlrpc-c/config.mk

@@ -1,6 +1,12 @@
+if P3
+LOCAL_CFLAGS=`python3-config --includes`
+LOCAL_LDFLAGS=`python3-config --ldflags`
+SITE_DIR=$(DESTDIR)/`python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1))"`
+else
 LOCAL_CFLAGS=`python ./python-config --includes`
 LOCAL_LDFLAGS=`python ./python-config --ldflags`
 SITE_DIR=$(DESTDIR)/`python -c "from distutils.sysconfig import get_python_lib; print get_python_lib(1)"`
+endif
 
 all: _ESL.so
 

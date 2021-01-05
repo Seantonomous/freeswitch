@@ -1228,8 +1228,8 @@ BuildRequires:	perl-ExtUtils-Embed
 Summary:        Python support for the FreeSWITCH open source telephony platform
 Group:          System/Libraries
 Requires:       %{name} = %{version}-%{release}
-Requires:       python
-BuildRequires:  python-devel
+Requires:       python3
+BuildRequires:  python3-devel
 
 %description    python
 
@@ -1376,8 +1376,8 @@ The Perl ESL module allows for native interaction with FreeSWITCH over the event
 %package	-n python-ESL
 Summary:	The Python ESL module allows for native interaction with FreeSWITCH over the event socket interface.
 Group:		System Environment/Libraries
-Requires:	python
-BuildRequires:	python-devel
+Requires:	python3
+BuildRequires:	python3-devel
 
 %description	-n python-ESL
 The Python ESL module allows for native interaction with FreeSWITCH over the event socket interface.

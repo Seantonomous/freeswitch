@@ -5,20 +5,20 @@ from ESL import *
 
 class ESLRequestHandler(SocketServer.BaseRequestHandler ):
 	def setup(self):
-		print self.client_address, 'connected!'
+		print (self.client_address, 'connected!')
 
 		fd = self.request.fileno()
-		print fd
+		print (fd)
 
 		con = ESLconnection(fd)
-		print "Connected: " 
-		print  con.connected()
+		print ("Connected: ")
+		print (con.connected())
 		if con.connected():
 
 			info = con.getInfo()
 
 			uuid = info.getHeader("unique-id")
-			print uuid
+			print (uuid)
 			con.execute("answer", "", uuid)
 			con.execute("playback", "/ram/swimp.raw", uuid);
 		
