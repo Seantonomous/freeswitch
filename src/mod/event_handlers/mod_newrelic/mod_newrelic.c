@@ -190,6 +190,8 @@ static switch_status_t my_on_hangup(switch_core_session_t *session)
 			newrelic_custom_event_add_attribute_string(custom_event, "SipToUser", h->value);
 		} else if (!strcasecmp(h->name, "sip_from_user")) {
 			newrelic_custom_event_add_attribute_string(custom_event, "SipFromUser", h->value);
+		} else if (!strcasecmp(h->name, "FreeSWITCH-Switchname")) {
+			newrelic_custom_event_add_attribute_string(custom_event, "SwitchName", h->value);
 		}
 	}
 
@@ -281,6 +283,8 @@ SWITCH_STANDARD_SCHED_FUNC(stats_callback)
 						newrelic_custom_event_add_attribute_string(custom_event, "SipFromUser", h->value);
 					} else if (!strcasecmp(h->name, "sip_contact_user")) {
 						newrelic_custom_event_add_attribute_string(custom_event, "ContactUser", h->value);
+					} else if (!strcasecmp(h->name, "FreeSWITCH-Switchname")) {
+						newrelic_custom_event_add_attribute_string(custom_event, "SwitchName", h->value);
 					}
 				}
 
