@@ -44,6 +44,7 @@ SWITCH_MODULE_DEFINITION(mod_newrelic, mod_newrelic_load, mod_newrelic_shutdown,
 static struct {
 	char *app_name;
 	char *license_key;
+	char *switch_name;
 	int report_rtp_stats;
 	uint32_t rtp_scan_interval;
 	uint32_t stats_task_id;
@@ -51,12 +52,20 @@ static struct {
 	switch_memory_pool_t *pool;
 	newrelic_app_config_t *config;
 	newrelic_app_t *app;
+	switch_hash_t *attr_hash;
 } globals;
+
+struct nr_attribute {
+	char* fs_name;
+	char* nr_attr;
+	char* nr_type;
+};
+typedef struct nr_attribute nr_attribute_t;
 
 static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *pool)
 {
 	char *cf = "newrelic.conf";
-	switch_xml_t cfg, xml, settings, param;
+	switch_xml_t cfg, xml, settings, param, include, fs_variable, nr_attribute, nr_type;
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Loading New Relic configuration\n");
 
@@ -69,6 +78,7 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 	globals.rtp_scan_interval = 30;
 	globals.pool = pool;
 	globals.stats_task_id = -1;
+	switch_core_hash_init(&globals.attr_hash);
 
 	/* parse the config */
 	if (!(xml = switch_xml_open_cfg(cf, &cfg, NULL))) {
@@ -76,11 +86,13 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 		return SWITCH_STATUS_TERM;
 	}
 
+	globals.switch_name = switch_core_strdup(globals.pool, switch_core_get_switchname());
+
 	if ((settings = switch_xml_child(cfg, "settings"))) {
 		for (param = switch_xml_child(settings, "param"); param; param = param->next) {
 			char *var = (char *) switch_xml_attr_soft(param, "name");
 			char *val = (char *) switch_xml_attr_soft(param, "value");
-			
+
 			if (!strcasecmp(var, "app-name") && !zstr(val)) {
 				globals.app_name = switch_core_strdup(globals.pool, val);
 			} else if (!strcasecmp(var, "license-key") && !zstr(val)) {
@@ -90,6 +102,59 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 			} else if (!strcasecmp(var, "rtp-scan-interval") && !zstr(val)) {
 				globals.rtp_scan_interval = (uint32_t) atoi(val);
 			}
+		}
+	}
+
+	if ((include = switch_xml_child(cfg, "include-attr"))) {
+		for (fs_variable = switch_xml_child(include, "variable"); fs_variable; fs_variable = fs_variable->next) {
+			nr_attribute_t* new_attribute = NULL;
+			char *fs_variable_name = NULL;
+			char *nr_attribute_name = NULL;
+			char *nr_type_name = NULL;
+
+			if (!(nr_attribute = switch_xml_child(fs_variable, "nr-attribute"))) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Ignoring NR attribute with no nr-attribute set.\n");
+				continue;
+			}
+
+			if (!(nr_type = switch_xml_child(fs_variable, "nr-type"))) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Ignoring NR attribute with no nr-type set.\n");
+				continue;
+			}
+
+			fs_variable_name = (char *) switch_xml_attr_soft(fs_variable, "name");
+			if (zstr(fs_variable_name)) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Ignoring NR attribute with no fs-variable name set.\n");
+				continue;
+			}
+
+			// See if we already have it
+			if ((new_attribute = switch_core_hash_find(globals.attr_hash, fs_variable_name))) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Ignoring FS variable '%s', already set.\n", fs_variable_name);
+				continue;
+			}
+
+			nr_attribute_name = (char *) switch_xml_attr_soft(nr_attribute, "name");
+			if (zstr(nr_attribute_name)) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Ignoring FS Variable '%s' NR attribute with no nr-attribute name set.\n", fs_variable_name);
+				continue;
+			}
+
+			nr_type_name = (char *) switch_xml_attr_soft(nr_type, "name");
+			if (zstr(nr_type_name)) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Ignoring FS Variable '%s' NR attribute with no nr-type name set.\n", fs_variable_name);
+				continue;
+			}
+
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Binding FS channel variable '%s' to NR attribute '%s' with type '%s'.\n", fs_variable_name, nr_attribute_name, nr_type_name);
+
+			// Initialize the struct and insert it into the hash
+			new_attribute = switch_core_alloc(globals.pool, sizeof(*new_attribute));
+			memset(new_attribute, 0, sizeof(*new_attribute));
+			new_attribute->fs_name = switch_core_strdup(globals.pool, fs_variable_name);
+			new_attribute->nr_attr = switch_core_strdup(globals.pool, nr_attribute_name);
+			new_attribute->nr_type = switch_core_strdup(globals.pool, nr_type_name);
+			switch_core_hash_insert(globals.attr_hash, new_attribute->fs_name, new_attribute);
 		}
 	}
 
@@ -110,7 +175,7 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 	newrelic_destroy_app_config(&globals.config);
 
 	switch_xml_free(xml);
-	
+
 	if (globals.app == NULL) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Error creating new relic app!\n");
 		return SWITCH_STATUS_TERM;
@@ -119,6 +184,20 @@ static switch_status_t do_config(switch_bool_t reload, switch_memory_pool_t *poo
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Succesfully loaded New Relic configuration\n");
 
 	return SWITCH_STATUS_SUCCESS;
+}
+
+static void nr_add_attr(newrelic_custom_event_t* custom_event, nr_attribute_t* nr_attr, const char* value) {
+	if (!strcasecmp(nr_attr->nr_type, "string")) {
+		newrelic_custom_event_add_attribute_string(custom_event, nr_attr->nr_attr, value);
+	} else if (!strcasecmp(nr_attr->nr_type, "int")) {
+		newrelic_custom_event_add_attribute_int(custom_event, nr_attr->nr_attr, atoi(value));
+	} else if (!strcasecmp(nr_attr->nr_type, "long")) {
+		newrelic_custom_event_add_attribute_long(custom_event, nr_attr->nr_attr, atol(value));
+	} else if (!strcasecmp(nr_attr->nr_type, "double")) {
+		newrelic_custom_event_add_attribute_double(custom_event, nr_attr->nr_attr, strtod(value, NULL));
+	}
+
+	return;
 }
 
 static switch_status_t my_on_hangup(switch_core_session_t *session)
@@ -138,62 +217,14 @@ static switch_status_t my_on_hangup(switch_core_session_t *session)
 	switch_channel_get_variables(channel, &event);
 
 	for (switch_event_header_t *h = event->headers; h; h = h->next) {
-		if (!strcasecmp(h->name, "rtp_audio_in_skip_packet_count")) {
-			newrelic_custom_event_add_attribute_long(custom_event, "SkipPacketCount", atol(h->value));
-		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_packet_count")) {
-			newrelic_custom_event_add_attribute_long(custom_event, "JitterPacketCount", atol(h->value));
-		} else if (!strcasecmp(h->name, "rtp_audio_in_dtmf_packet_count")) {
-			newrelic_custom_event_add_attribute_long(custom_event, "DTMFPacketCount", atol(h->value));
-		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_min_variance")) {
-			newrelic_custom_event_add_attribute_double(custom_event, "JitterMinVariance", strtod(h->value, NULL));
-		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_max_variance")) {
-			newrelic_custom_event_add_attribute_double(custom_event, "JitterMaxVariance", strtod(h->value, NULL));
-		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_loss_rate")) {
-			newrelic_custom_event_add_attribute_double(custom_event, "JitterLossRate", strtod(h->value, NULL));
-		} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_burst_rate")) {
-			newrelic_custom_event_add_attribute_double(custom_event, "JitterBurstRate", strtod(h->value, NULL));
-		} else if (!strcasecmp(h->name, "rtp_audio_in_mean_interval")) {
-			newrelic_custom_event_add_attribute_double(custom_event, "MeanInterval", strtod(h->value, NULL));
-		} else if (!strcasecmp(h->name, "rtp_audio_in_flaw_total")) {
-			newrelic_custom_event_add_attribute_long(custom_event, "FlawTotal", atol(h->value));
-		} else if (!strcasecmp(h->name, "rtp_audio_in_mos")) {
-			newrelic_custom_event_add_attribute_double(custom_event, "Mos", strtod(h->value, NULL));
-		} else if (!strcasecmp(h->name, "sip_from_host")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SipFromHost", h->value);
-		} else if (!strcasecmp(h->name, "sip_contact_user")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SipContactUser", h->value);
-		} else if (!strcasecmp(h->name, "read_codec")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "ReadCodec", h->value);
-		} else if (!strcasecmp(h->name, "write_codec")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "WriteCodec", h->value);
-		} else if (!strcasecmp(h->name, "hangup_cause")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "HangupCause", h->value);
-		} else if (!strcasecmp(h->name, "sip_invite_failure_status")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SipInviteFailureStatus", h->value);
-		} else if (!strcasecmp(h->name, "sip_invite_failure_phrase")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SipInviteFailurePhrase", h->value);
-		} else if (!strcasecmp(h->name, "sip_user_agent")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SipUserAgent", h->value);
-		} else if (!strcasecmp(h->name, "sip_term_status")) {
-			newrelic_custom_event_add_attribute_int(custom_event, "SipTermStatus", atoi(h->value));
-		} else if (!strcasecmp(h->name, "sofia_profile_name")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SofiaProfileName", h->value);
-		} else if (!strcasecmp(h->name, "direction")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "Direction", h->value);
-		} else if (!strcasecmp(h->name, "sip_gateway_name")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SipGatewayName", h->value);
-		} else if (!strcasecmp(h->name, "remote_media_ip")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "RemoteMediaIp", h->value);
-		} else if (!strcasecmp(h->name, "uuid")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "Uuid", h->value);
-		} else if (!strcasecmp(h->name, "sip_to_user")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SipToUser", h->value);
-		} else if (!strcasecmp(h->name, "sip_from_user")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SipFromUser", h->value);
-		} else if (!strcasecmp(h->name, "FreeSWITCH-Switchname")) {
-			newrelic_custom_event_add_attribute_string(custom_event, "SwitchName", h->value);
+		nr_attribute_t* nr_event_attribute = NULL;
+		// Check to see if the header is one we care about
+		if ((nr_event_attribute = switch_core_hash_find(globals.attr_hash, h->name))) {
+			nr_add_attr(custom_event, nr_event_attribute, h->value);
 		}
 	}
+
+	newrelic_custom_event_add_attribute_string(custom_event, "SwitchName", globals.switch_name);
 
 	newrelic_record_custom_event(txn, &custom_event);
 	newrelic_end_segment(txn, &seg);
@@ -245,48 +276,14 @@ SWITCH_STANDARD_SCHED_FUNC(stats_callback)
 				switch_channel_get_variables(channel, &event);
 
 				for (switch_event_header_t *h = event->headers; h; h = h->next) {
-					if (!strcasecmp(h->name, "rtp_audio_in_skip_packet_count")) {
-						newrelic_custom_event_add_attribute_long(custom_event, "SkipPacketCount", atol(h->value));
-					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_packet_count")) {
-						newrelic_custom_event_add_attribute_long(custom_event, "JitterPacketCount", atol(h->value));
-					} else if (!strcasecmp(h->name, "rtp_audio_in_dtmf_packet_count")) {
-						newrelic_custom_event_add_attribute_long(custom_event, "DTMFPacketCount", atol(h->value));
-					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_min_variance")) {
-						newrelic_custom_event_add_attribute_double(custom_event, "JitterMinVariance", strtod(h->value, NULL));
-					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_max_variance")) {
-						newrelic_custom_event_add_attribute_double(custom_event, "JitterMaxVariance", strtod(h->value, NULL));
-					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_loss_rate")) {
-						newrelic_custom_event_add_attribute_double(custom_event, "JitterLossRate", strtod(h->value, NULL));
-					} else if (!strcasecmp(h->name, "rtp_audio_in_jitter_burst_rate")) {
-						newrelic_custom_event_add_attribute_double(custom_event, "JitterBurstRate", strtod(h->value, NULL));
-					} else if (!strcasecmp(h->name, "rtp_audio_in_mean_interval")) {
-						newrelic_custom_event_add_attribute_double(custom_event, "MeanInterval", strtod(h->value, NULL));
-					} else if (!strcasecmp(h->name, "rtp_audio_in_flaw_total")) {
-						newrelic_custom_event_add_attribute_long(custom_event, "FlawTotal", atol(h->value));
-					} else if (!strcasecmp(h->name, "rtp_audio_in_mos")) {
-						newrelic_custom_event_add_attribute_double(custom_event, "Mos", strtod(h->value, NULL));
-					} else if (!strcasecmp(h->name, "sofia_profile_name")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "SofiaProfileName", h->value);
-					} else if (!strcasecmp(h->name, "direction")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "Direction", h->value);
-					} else if (!strcasecmp(h->name, "sip_gateway_name")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "SipGatewayName", h->value);
-					} else if (!strcasecmp(h->name, "sip_gateway_name")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "SipGatewayName", h->value);
-					} else if (!strcasecmp(h->name, "remote_media_ip")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "RemoteMediaIp", h->value);
-					} else if (!strcasecmp(h->name, "uuid")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "Uuid", h->value);
-					} else if (!strcasecmp(h->name, "sip_to_user")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "SipToUser", h->value);
-					} else if (!strcasecmp(h->name, "sip_from_user")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "SipFromUser", h->value);
-					} else if (!strcasecmp(h->name, "sip_contact_user")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "ContactUser", h->value);
-					} else if (!strcasecmp(h->name, "FreeSWITCH-Switchname")) {
-						newrelic_custom_event_add_attribute_string(custom_event, "SwitchName", h->value);
+					nr_attribute_t* nr_event_attribute = NULL;
+					// Check to see if the header is one we care about
+					if ((nr_event_attribute = switch_core_hash_find(globals.attr_hash, h->name))) {
+						nr_add_attr(custom_event, nr_event_attribute, h->value);
 					}
 				}
+
+				newrelic_custom_event_add_attribute_string(custom_event, "SwitchName", globals.switch_name);
 
 				newrelic_record_custom_event(txn, &custom_event);
 			}
@@ -339,6 +336,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_newrelic_shutdown)
 		newrelic_destroy_app(&globals.app);
 	}
 
+	switch_core_hash_destroy(&globals.attr_hash);
 	switch_event_unbind(&globals.node);
 	switch_core_remove_state_handler(&state_handlers);
 
