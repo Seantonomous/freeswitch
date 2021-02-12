@@ -1,120 +1,120 @@
 <include>
-	<configuration name="newrelic.conf" description="NEWRELIC APM">
-		<settings>
+  <configuration name="newrelic.conf" description="NEWRELIC APM">
+    <settings>
       <!-- New Relic app name -->
       <param name="app-name" value=""/>
       <!-- New Relic license key -->
       <param name="license-key" value=""/>
-			<!-- Report RTP stats for active channels - increased overhead! -->
-			<param name="report-rtp-stats" value="true"/>
-			<!-- How often to check RTP stats -->
-			<param name="rtp-scan-interval" value="30"/>
-		</settings>
-		<include-attr>
-			<variable name="rtp_audio_in_skip_packet_count">
-				<nr-attribute name="SkipPacketCount"/>
-				<nr-type name="long"/>
-			</variable>
-			<variable name="rtp_audio_in_jitter_packet_count">
-				<nr-attribute name="JitterPacketCount"/>
-				<nr-type name="long"/>
-			</variable>
-			<variable name="rtp_audio_in_dtmf_packet_count">
-				<nr-attribute name="DTMFPacketCount"/>
-				<nr-type name="long"/>
-			</variable>
-			<variable name="rtp_audio_in_jitter_min_variance">
-				<nr-attribute name="JitterMinVariance"/>
-				<nr-type name="double"/>
-			</variable>
-			<variable name="rtp_audio_in_jitter_max_variance">
-				<nr-attribute name="JitterMaxVariance"/>
-				<nr-type name="double"/>
-			</variable>
-			<variable name="rtp_audio_in_jitter_loss_rate">
-				<nr-attribute name="JitterLossRate"/>
-				<nr-type name="double"/>
-			</variable>
-			<variable name="rtp_audio_in_jitter_burst_rate">
-				<nr-attribute name="JitterBurstRate"/>
-				<nr-type name="double"/>
-			</variable>
-			<variable name="rtp_audio_in_mean_interval">
-				<nr-attribute name="MeanInterval"/>
-				<nr-type name="double"/>
-			</variable>
-			<variable name="rtp_audio_in_flaw_total">
-				<nr-attribute name="FlawTotal"/>
-				<nr-type name="long"/>
-			</variable>
-			<variable name="rtp_audio_in_mos">
-				<nr-attribute name="Mos"/>
-				<nr-type name="double"/>
-			</variable>
-			<variable name="sip_from_host">
-				<nr-attribute name="SipFromHost"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="sip_contact_user">
-				<nr-attribute name="SipContactUser"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="read_codec">
-				<nr-attribute name="ReadCodec"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="write_codec">
-				<nr-attribute name="WriteCodec"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="hangup_cause">
-				<nr-attribute name="HangupCause"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="sip_invite_failure_status">
-				<nr-attribute name="SipInviteFailureStatus"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="sip_invite_failure_phrase">
-				<nr-attribute name="SipInviteFailurePhrase"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="sip_term_status">
-				<nr-attribute name="SipTermStatus"/>
-				<nr-type name="int"/>
-			</variable>
-			<variable name="sip_user_agent">
-				<nr-attribute name="SipUserAgent"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="sofia_profile_name">
-				<nr-attribute name="SofiaProfileName"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="direction">
-				<nr-attribute name="Direction"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="sip_gateway_name">
-				<nr-attribute name="SipGatewayName"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="remote_media_ip">
-				<nr-attribute name="RemoteMediaIp"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="uuid">
-				<nr-attribute name="Uuid"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="sip_to_user">
-				<nr-attribute name="SipToUser"/>
-				<nr-type name="string"/>
-			</variable>
-			<variable name="sip_from_user">
-				<nr-attribute name="SipFromUser"/>
-				<nr-type name="string"/>
-			</variable>
-		</include-attr>
-	</configuration>
+      <!-- Report RTP stats for active channels - increased overhead! -->
+      <param name="report-rtp-stats" value="true"/>
+      <!-- How often to check RTP stats -->
+      <param name="rtp-scan-interval" value="30"/>
+    </settings>
+    <include-attr>
+      <variable name="rtp_audio_in_skip_packet_count">
+        <nr-attribute name="SkipPacketCount"/>
+        <nr-type name="long"/>
+      </variable>
+      <variable name="rtp_audio_in_jitter_packet_count">
+        <nr-attribute name="JitterPacketCount"/>
+        <nr-type name="long"/>
+      </variable>
+      <variable name="rtp_audio_in_dtmf_packet_count">
+        <nr-attribute name="DTMFPacketCount"/>
+        <nr-type name="long"/>
+      </variable>
+      <variable name="rtp_audio_in_jitter_min_variance">
+        <nr-attribute name="JitterMinVariance"/>
+        <nr-type name="double"/>
+      </variable>
+      <variable name="rtp_audio_in_jitter_max_variance">
+        <nr-attribute name="JitterMaxVariance"/>
+        <nr-type name="double"/>
+      </variable>
+      <variable name="rtp_audio_in_jitter_loss_rate">
+        <nr-attribute name="JitterLossRate"/>
+        <nr-type name="double"/>
+      </variable>
+      <variable name="rtp_audio_in_jitter_burst_rate">
+        <nr-attribute name="JitterBurstRate"/>
+        <nr-type name="double"/>
+      </variable>
+      <variable name="rtp_audio_in_mean_interval">
+        <nr-attribute name="MeanInterval"/>
+        <nr-type name="double"/>
+      </variable>
+      <variable name="rtp_audio_in_flaw_total">
+        <nr-attribute name="FlawTotal"/>
+        <nr-type name="long"/>
+      </variable>
+      <variable name="rtp_audio_in_mos">
+        <nr-attribute name="Mos"/>
+        <nr-type name="double"/>
+      </variable>
+      <variable name="sip_from_host">
+        <nr-attribute name="SipFromHost"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="sip_contact_user">
+        <nr-attribute name="SipContactUser"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="read_codec">
+        <nr-attribute name="ReadCodec"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="write_codec">
+        <nr-attribute name="WriteCodec"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="hangup_cause">
+        <nr-attribute name="HangupCause"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="sip_invite_failure_status">
+        <nr-attribute name="SipInviteFailureStatus"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="sip_invite_failure_phrase">
+        <nr-attribute name="SipInviteFailurePhrase"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="sip_term_status">
+        <nr-attribute name="SipTermStatus"/>
+        <nr-type name="int"/>
+      </variable>
+      <variable name="sip_user_agent">
+        <nr-attribute name="SipUserAgent"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="sofia_profile_name">
+        <nr-attribute name="SofiaProfileName"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="direction">
+        <nr-attribute name="Direction"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="sip_gateway_name">
+        <nr-attribute name="SipGatewayName"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="remote_media_ip">
+        <nr-attribute name="RemoteMediaIp"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="uuid">
+        <nr-attribute name="Uuid"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="sip_to_user">
+        <nr-attribute name="SipToUser"/>
+        <nr-type name="string"/>
+      </variable>
+      <variable name="sip_from_user">
+        <nr-attribute name="SipFromUser"/>
+        <nr-type name="string"/>
+      </variable>
+    </include-attr>
+  </configuration>
 </include>
